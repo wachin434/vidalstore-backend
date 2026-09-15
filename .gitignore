@@ -1,0 +1,6 @@
+microservicio/node_modules/
+microservicio/.env
+
+ficha.txt
+*.log
+.DS_Store
