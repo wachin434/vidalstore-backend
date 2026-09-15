@@ -1,0 +1,16 @@
+{
+  "name": "vidalstore-microservicio",
+  "version": "1.0.0",
+  "description": "Catálogo, biblioteca y licencias de VidalStore. Datos en memoria.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "start:dev": "node --watch src/index.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "jose": "^5.9.6"
+  }
+}
