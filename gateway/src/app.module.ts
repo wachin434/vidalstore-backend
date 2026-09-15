@@ -5,6 +5,7 @@ import { BibliotecaController } from './biblioteca/biblioteca.controller';
 import { LicenciasController } from './licencias/licencias.controller';
 import { AuditoriaController } from './auditoria/auditoria.controller';
 
+
 @Module({
   controllers: [
     CatalogoController,
