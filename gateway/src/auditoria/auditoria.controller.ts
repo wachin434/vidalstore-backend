@@ -2,8 +2,6 @@ import { Controller, ForbiddenException, Get, Headers } from '@nestjs/common';
 import { estaEnGrupo } from '../auth/verificador';
 import { autenticarOFallar, MICROSERVICIO_URL } from '../auth/http';
 
-// GET /v1/auditoria -> grupo administradores.
-// Requerimiento adicional para grupos de 3.
 @Controller('v1/auditoria')
 export class AuditoriaController {
   @Get()
@@ -14,7 +12,7 @@ export class AuditoriaController {
       throw new ForbiddenException('solo administradores ven el registro de auditoría');
     }
 
-    const r = await fetch(${MICROSERVICIO_URL}/auditoria);
+    const r = await fetch(`${MICROSERVICIO_URL}/auditoria`);
     return r.json();
   }
 }

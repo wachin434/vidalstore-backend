@@ -9,8 +9,6 @@ import {
 import { estaEnGrupo } from '../auth/verificador';
 import { autenticarOFallar, MICROSERVICIO_URL } from '../auth/http';
 
-// GET    /v1/licencias             -> grupo administradores. Ve las de TODOS.
-// DELETE /v1/licencias/:licenciaId -> grupo administradores. Revoca una licencia.
 @Controller('v1/licencias')
 export class LicenciasController {
   @Get()
@@ -21,7 +19,7 @@ export class LicenciasController {
       throw new ForbiddenException('solo administradores ven las licencias de todos los usuarios');
     }
 
-    const r = await fetch(${MICROSERVICIO_URL}/licencias);
+    const r = await fetch(`${MICROSERVICIO_URL}/licencias`);
     return r.json();
   }
 
@@ -36,7 +34,7 @@ export class LicenciasController {
       throw new ForbiddenException('solo administradores pueden revocar una licencia');
     }
 
-    const r = await fetch(${MICROSERVICIO_URL}/licencias/${licenciaId}, {
+    const r = await fetch(`${MICROSERVICIO_URL}/licencias/${licenciaId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ revocadoPor: claims.sub }),
