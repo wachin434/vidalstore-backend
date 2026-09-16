@@ -42,6 +42,13 @@ app.post('/compras', (req, res) => {
   const juego = catalogo.find((j) => j.id === juegoId);
   if (!juego) return res.status(404).json({ error: 'el juego no existe' });
 
+  const yaLoTiene = licencias.some(
+    (l) => l.juegoId === juegoId && l.usuarioSub === usuarioSub && !l.revocada,
+  );
+  if (yaLoTiene) {
+    return res.status(409).json({ error: 'ya tienes una licencia activa de este juego' });
+  }
+
   const licencia = crearLicencia(juegoId, usuarioSub);
   res.status(201).json({ licencia, juego });
 });
