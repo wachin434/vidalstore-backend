@@ -5,6 +5,11 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Express genera ETags automáticos, y eso hace que el navegador reciba
+  // 304 Not Modified con el cuerpo vacío en vez del JSON real. Una API que
+  // cambia con cada compra/revocación no debe cachearse así.
+  app.getHttpAdapter().getInstance().disable('etag');
+
   const origin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:4200';
 
   app.enableCors({
