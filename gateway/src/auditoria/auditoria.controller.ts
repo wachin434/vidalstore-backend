@@ -12,7 +12,9 @@ export class AuditoriaController {
       throw new ForbiddenException('solo administradores ven el registro de auditoría');
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/auditoria`);
+    const r = await fetch(`${MICROSERVICIO_URL}/auditoria`, {
+      headers: { Authorization: authorization! },
+    });
     return r.json();
   }
 }

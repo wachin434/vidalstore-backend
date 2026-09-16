@@ -21,7 +21,9 @@ export class CatalogoController {
       throw new ForbiddenException('te falta el permiso vidalstore/catalogo.leer');
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/catalogo`);
+    const r = await fetch(`${MICROSERVICIO_URL}/catalogo`, {
+      headers: { Authorization: authorization! },
+    });
     return r.json();
   }
 
@@ -38,7 +40,10 @@ export class CatalogoController {
 
     const r = await fetch(`${MICROSERVICIO_URL}/catalogo`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authorization!,
+      },
       body: JSON.stringify({ ...(body as object), publicadoPor: claims.sub }),
     });
     return r.json();
@@ -58,7 +63,10 @@ export class CatalogoController {
 
     const r = await fetch(`${MICROSERVICIO_URL}/catalogo/${juegoId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authorization!,
+      },
       body: JSON.stringify({ ...(body as object), editadoPor: claims.sub }),
     });
     return r.json();

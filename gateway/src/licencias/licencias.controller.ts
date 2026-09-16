@@ -19,7 +19,9 @@ export class LicenciasController {
       throw new ForbiddenException('solo administradores ven las licencias de todos los usuarios');
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/licencias`);
+    const r = await fetch(`${MICROSERVICIO_URL}/licencias`, {
+      headers: { Authorization: authorization! },
+    });
     return r.json();
   }
 
@@ -36,7 +38,10 @@ export class LicenciasController {
 
     const r = await fetch(`${MICROSERVICIO_URL}/licencias/${licenciaId}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authorization!,
+      },
       body: JSON.stringify({ revocadoPor: claims.sub }),
     });
     return r.json();
