@@ -39,7 +39,7 @@ app.get('/catalogo', (_req, res) => {
     (juego) => juego.activo !== false,
   );
 
-  res.json(juegosActivos);
+  return res.json(juegosActivos);
 });
 
 /* =====================================================
@@ -113,11 +113,13 @@ app.post('/catalogo', (req, res) => {
     id,
     titulo: titulo.trim(),
     precio: precioNumero,
-    genero: genero?.trim() || 'Sin categoría',
+    genero:
+      genero?.trim() || 'Sin categoría',
     portada:
       portada?.trim() ||
       'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=600',
-    descripcion: descripcion?.trim() || '',
+    descripcion:
+      descripcion?.trim() || '',
     activo: true,
     publicadoPor: req.claims.sub,
     creadoEn: new Date().toISOString(),
@@ -161,7 +163,8 @@ app.put('/catalogo/:juegoId', (req, res) => {
 
   if (juego.activo === false) {
     return res.status(409).json({
-      error: 'el juego fue eliminado del catálogo',
+      error:
+        'el juego fue eliminado del catálogo',
     });
   }
 
@@ -174,11 +177,13 @@ app.put('/catalogo/:juegoId', (req, res) => {
   } = req.body ?? {};
 
   if (titulo !== undefined) {
-    const tituloLimpio = String(titulo).trim();
+    const tituloLimpio =
+      String(titulo).trim();
 
     if (!tituloLimpio) {
       return res.status(400).json({
-        error: 'el título no puede estar vacío',
+        error:
+          'el título no puede estar vacío',
       });
     }
 
@@ -193,7 +198,8 @@ app.put('/catalogo/:juegoId', (req, res) => {
       precioNumero < 0
     ) {
       return res.status(400).json({
-        error: 'el precio debe ser un número válido',
+        error:
+          'el precio debe ser un número válido',
       });
     }
 
@@ -207,7 +213,8 @@ app.put('/catalogo/:juegoId', (req, res) => {
   }
 
   if (portada !== undefined) {
-    juego.portada = String(portada).trim();
+    juego.portada =
+      String(portada).trim();
   }
 
   if (descripcion !== undefined) {
@@ -216,11 +223,63 @@ app.put('/catalogo/:juegoId', (req, res) => {
   }
 
   juego.editadoPor = req.claims.sub;
-  juego.editadoEn = new Date().toISOString();
+  juego.editadoEn =
+    new Date().toISOString();
 
   guardarCatalogo();
 
   return res.json(juego);
+});
+
+/* =====================================================
+   ELIMINAR JUEGO
+   Eliminación lógica.
+   Solo editores y administradores.
+===================================================== */
+
+app.delete('/catalogo/:juegoId', (req, res) => {
+  if (
+    !estaEnGrupo(
+      req.claims,
+      'editores',
+      'administradores',
+    )
+  ) {
+    return res.status(403).json({
+      error:
+        'solo editores o administradores pueden eliminar juegos',
+    });
+  }
+
+  const juego = catalogo.find(
+    (j) => j.id === req.params.juegoId,
+  );
+
+  if (!juego) {
+    return res.status(404).json({
+      error: 'juego no existe',
+    });
+  }
+
+  if (juego.activo === false) {
+    return res.status(409).json({
+      error:
+        'el juego ya fue eliminado del catálogo',
+    });
+  }
+
+  juego.activo = false;
+  juego.eliminadoPor = req.claims.sub;
+  juego.eliminadoEn =
+    new Date().toISOString();
+
+  guardarCatalogo();
+
+  return res.json({
+    mensaje:
+      'juego eliminado del catálogo',
+    juego,
+  });
 });
 
 /* =====================================================
@@ -312,12 +371,14 @@ app.get('/licencias', (req, res) => {
     });
   }
 
-  const todas = licencias.map((l) => ({
-    ...l,
-    juego: catalogo.find(
-      (j) => j.id === l.juegoId,
-    ),
-  }));
+  const todas = licencias.map(
+    (l) => ({
+      ...l,
+      juego: catalogo.find(
+        (j) => j.id === l.juegoId,
+      ),
+    }),
+  );
 
   return res.json(todas);
 });

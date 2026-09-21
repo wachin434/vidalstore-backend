@@ -1,74 +1,218 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Headers,
+  HttpException,
   Param,
   Post,
   Put,
 } from '@nestjs/common';
-import { estaEnGrupo, tieneScope } from '../auth/verificador';
-import { autenticarOFallar, MICROSERVICIO_URL } from '../auth/http';
+
+import {
+  estaEnGrupo,
+  tieneScope,
+} from '../auth/verificador';
+
+import {
+  autenticarOFallar,
+  MICROSERVICIO_URL,
+} from '../auth/http';
 
 @Controller('v1/catalogo')
 export class CatalogoController {
-  @Get()
-  async listar(@Headers('authorization') authorization?: string) {
-    const claims = await autenticarOFallar(authorization);
+  private async responder(r: Response) {
+    const data = await r.json();
 
-    if (!tieneScope(claims, 'catalogo.leer')) {
-      throw new ForbiddenException('te falta el permiso vidalstore/catalogo.leer');
+    if (!r.ok) {
+      throw new HttpException(
+        data,
+        r.status,
+      );
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/catalogo`, {
-      headers: { Authorization: authorization! },
-    });
-    return r.json();
+    return data;
   }
+
+  /* ===================================================
+     LISTAR CATÁLOGO
+  =================================================== */
+
+  @Get()
+  async listar(
+    @Headers('authorization')
+    authorization?: string,
+  ) {
+    const claims =
+      await autenticarOFallar(
+        authorization,
+      );
+
+    if (
+      !tieneScope(
+        claims,
+        'catalogo.leer',
+      )
+    ) {
+      throw new ForbiddenException(
+        'te falta el permiso vidalstore/catalogo.leer',
+      );
+    }
+
+    const r = await fetch(
+      `${MICROSERVICIO_URL}/catalogo`,
+      {
+        headers: {
+          Authorization:
+            authorization!,
+        },
+      },
+    );
+
+    return this.responder(r);
+  }
+
+  /* ===================================================
+     PUBLICAR JUEGO
+  =================================================== */
 
   @Post()
   async publicar(
-    @Headers('authorization') authorization?: string,
-    @Body() body?: unknown,
+    @Headers('authorization')
+    authorization?: string,
+    @Body()
+    body?: unknown,
   ) {
-    const claims = await autenticarOFallar(authorization);
+    const claims =
+      await autenticarOFallar(
+        authorization,
+      );
 
-    if (!estaEnGrupo(claims, 'editores', 'administradores')) {
-      throw new ForbiddenException('solo editores o administradores publican juegos');
+    if (
+      !estaEnGrupo(
+        claims,
+        'editores',
+        'administradores',
+      )
+    ) {
+      throw new ForbiddenException(
+        'solo editores o administradores publican juegos',
+      );
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/catalogo`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authorization!,
+    const r = await fetch(
+      `${MICROSERVICIO_URL}/catalogo`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+          Authorization:
+            authorization!,
+        },
+        body: JSON.stringify({
+          ...(body as object),
+          publicadoPor:
+            claims.sub,
+        }),
       },
-      body: JSON.stringify({ ...(body as object), publicadoPor: claims.sub }),
-    });
-    return r.json();
+    );
+
+    return this.responder(r);
   }
+
+  /* ===================================================
+     EDITAR JUEGO
+  =================================================== */
 
   @Put(':juegoId')
   async editar(
-    @Param('juegoId') juegoId: string,
-    @Headers('authorization') authorization?: string,
-    @Body() body?: unknown,
+    @Param('juegoId')
+    juegoId: string,
+    @Headers('authorization')
+    authorization?: string,
+    @Body()
+    body?: unknown,
   ) {
-    const claims = await autenticarOFallar(authorization);
+    const claims =
+      await autenticarOFallar(
+        authorization,
+      );
 
-    if (!estaEnGrupo(claims, 'editores', 'administradores')) {
-      throw new ForbiddenException('solo editores o administradores editan el catálogo');
+    if (
+      !estaEnGrupo(
+        claims,
+        'editores',
+        'administradores',
+      )
+    ) {
+      throw new ForbiddenException(
+        'solo editores o administradores editan el catálogo',
+      );
     }
 
-    const r = await fetch(`${MICROSERVICIO_URL}/catalogo/${juegoId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authorization!,
+    const r = await fetch(
+      `${MICROSERVICIO_URL}/catalogo/${encodeURIComponent(juegoId)}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type':
+            'application/json',
+          Authorization:
+            authorization!,
+        },
+        body: JSON.stringify({
+          ...(body as object),
+          editadoPor:
+            claims.sub,
+        }),
       },
-      body: JSON.stringify({ ...(body as object), editadoPor: claims.sub }),
-    });
-    return r.json();
+    );
+
+    return this.responder(r);
+  }
+
+  /* ===================================================
+     ELIMINAR JUEGO
+  =================================================== */
+
+  @Delete(':juegoId')
+  async eliminar(
+    @Param('juegoId')
+    juegoId: string,
+    @Headers('authorization')
+    authorization?: string,
+  ) {
+    const claims =
+      await autenticarOFallar(
+        authorization,
+      );
+
+    if (
+      !estaEnGrupo(
+        claims,
+        'editores',
+        'administradores',
+      )
+    ) {
+      throw new ForbiddenException(
+        'solo editores o administradores eliminan juegos',
+      );
+    }
+
+    const r = await fetch(
+      `${MICROSERVICIO_URL}/catalogo/${encodeURIComponent(juegoId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization:
+            authorization!,
+        },
+      },
+    );
+
+    return this.responder(r);
   }
 }
