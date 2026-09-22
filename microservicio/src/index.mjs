@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { middlewareAuth, estaEnGrupo } from './auth.mjs';
+import {
+  middlewareAuth,
+  estaEnGrupo,
+} from './auth.mjs';
+
 import {
   catalogo,
   licencias,
@@ -35,11 +39,15 @@ function crearSlug(titulo) {
 ===================================================== */
 
 app.get('/catalogo', (_req, res) => {
-  const juegosActivos = catalogo.filter(
-    (juego) => juego.activo !== false,
-  );
+  const juegosActivos =
+    catalogo.filter(
+      (juego) =>
+        juego.activo !== false,
+    );
 
-  return res.json(juegosActivos);
+  return res.json(
+    juegosActivos,
+  );
 });
 
 /* =====================================================
@@ -75,32 +83,41 @@ app.post('/catalogo', (req, res) => {
     precio === null
   ) {
     return res.status(400).json({
-      error: 'faltan titulo o precio',
+      error:
+        'faltan titulo o precio',
     });
   }
 
-  const precioNumero = Number(precio);
+  const precioNumero =
+    Number(precio);
 
   if (
-    !Number.isFinite(precioNumero) ||
+    !Number.isFinite(
+      precioNumero,
+    ) ||
     precioNumero < 0
   ) {
     return res.status(400).json({
-      error: 'el precio debe ser un número válido',
+      error:
+        'el precio debe ser un número válido',
     });
   }
 
-  const id = crearSlug(titulo);
+  const id =
+    crearSlug(titulo);
 
   if (!id) {
     return res.status(400).json({
-      error: 'no se pudo generar un id válido',
+      error:
+        'no se pudo generar un id válido',
     });
   }
 
-  const yaExiste = catalogo.some(
-    (juego) => juego.id === id,
-  );
+  const yaExiste =
+    catalogo.some(
+      (juego) =>
+        juego.id === id,
+    );
 
   if (yaExiste) {
     return res.status(409).json({
@@ -111,25 +128,40 @@ app.post('/catalogo', (req, res) => {
 
   const juego = {
     id,
-    titulo: titulo.trim(),
-    precio: precioNumero,
+
+    titulo:
+      titulo.trim(),
+
+    precio:
+      precioNumero,
+
     genero:
-      genero?.trim() || 'Sin categoría',
+      genero?.trim() ||
+      'Sin categoría',
+
     portada:
       portada?.trim() ||
       'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=600',
+
     descripcion:
       descripcion?.trim() || '',
+
     activo: true,
-    publicadoPor: req.claims.sub,
-    creadoEn: new Date().toISOString(),
+
+    publicadoPor:
+      req.claims.sub,
+
+    creadoEn:
+      new Date().toISOString(),
   };
 
   catalogo.push(juego);
 
   guardarCatalogo();
 
-  return res.status(201).json(juego);
+  return res
+    .status(201)
+    .json(juego);
 });
 
 /* =====================================================
@@ -137,99 +169,131 @@ app.post('/catalogo', (req, res) => {
    Solo editores y administradores
 ===================================================== */
 
-app.put('/catalogo/:juegoId', (req, res) => {
-  if (
-    !estaEnGrupo(
-      req.claims,
-      'editores',
-      'administradores',
-    )
-  ) {
-    return res.status(403).json({
-      error:
-        'solo editores o administradores pueden editar el catálogo',
-    });
-  }
-
-  const juego = catalogo.find(
-    (j) => j.id === req.params.juegoId,
-  );
-
-  if (!juego) {
-    return res.status(404).json({
-      error: 'juego no existe',
-    });
-  }
-
-  if (juego.activo === false) {
-    return res.status(409).json({
-      error:
-        'el juego fue eliminado del catálogo',
-    });
-  }
-
-  const {
-    titulo,
-    precio,
-    genero,
-    portada,
-    descripcion,
-  } = req.body ?? {};
-
-  if (titulo !== undefined) {
-    const tituloLimpio =
-      String(titulo).trim();
-
-    if (!tituloLimpio) {
-      return res.status(400).json({
+app.put(
+  '/catalogo/:juegoId',
+  (req, res) => {
+    if (
+      !estaEnGrupo(
+        req.claims,
+        'editores',
+        'administradores',
+      )
+    ) {
+      return res.status(403).json({
         error:
-          'el título no puede estar vacío',
+          'solo editores o administradores pueden editar el catálogo',
       });
     }
 
-    juego.titulo = tituloLimpio;
-  }
+    const juego =
+      catalogo.find(
+        (j) =>
+          j.id ===
+          req.params.juegoId,
+      );
 
-  if (precio !== undefined) {
-    const precioNumero = Number(precio);
+    if (!juego) {
+      return res.status(404).json({
+        error:
+          'juego no existe',
+      });
+    }
 
     if (
-      !Number.isFinite(precioNumero) ||
-      precioNumero < 0
+      juego.activo === false
     ) {
-      return res.status(400).json({
+      return res.status(409).json({
         error:
-          'el precio debe ser un número válido',
+          'el juego fue eliminado del catálogo',
       });
     }
 
-    juego.precio = precioNumero;
-  }
+    const {
+      titulo,
+      precio,
+      genero,
+      portada,
+      descripcion,
+    } = req.body ?? {};
 
-  if (genero !== undefined) {
-    juego.genero =
-      String(genero).trim() ||
-      'Sin categoría';
-  }
+    if (
+      titulo !== undefined
+    ) {
+      const tituloLimpio =
+        String(titulo).trim();
 
-  if (portada !== undefined) {
-    juego.portada =
-      String(portada).trim();
-  }
+      if (!tituloLimpio) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'el título no puede estar vacío',
+          });
+      }
 
-  if (descripcion !== undefined) {
-    juego.descripcion =
-      String(descripcion).trim();
-  }
+      juego.titulo =
+        tituloLimpio;
+    }
 
-  juego.editadoPor = req.claims.sub;
-  juego.editadoEn =
-    new Date().toISOString();
+    if (
+      precio !== undefined
+    ) {
+      const precioNumero =
+        Number(precio);
 
-  guardarCatalogo();
+      if (
+        !Number.isFinite(
+          precioNumero,
+        ) ||
+        precioNumero < 0
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'el precio debe ser un número válido',
+          });
+      }
 
-  return res.json(juego);
-});
+      juego.precio =
+        precioNumero;
+    }
+
+    if (
+      genero !== undefined
+    ) {
+      juego.genero =
+        String(genero).trim() ||
+        'Sin categoría';
+    }
+
+    if (
+      portada !== undefined
+    ) {
+      juego.portada =
+        String(portada).trim();
+    }
+
+    if (
+      descripcion !== undefined
+    ) {
+      juego.descripcion =
+        String(
+          descripcion,
+        ).trim();
+    }
+
+    juego.editadoPor =
+      req.claims.sub;
+
+    juego.editadoEn =
+      new Date().toISOString();
+
+    guardarCatalogo();
+
+    return res.json(juego);
+  },
+);
 
 /* =====================================================
    ELIMINAR JUEGO
@@ -237,78 +301,108 @@ app.put('/catalogo/:juegoId', (req, res) => {
    Solo administradores
 ===================================================== */
 
-app.delete('/catalogo/:juegoId', (req, res) => {
-  if (
-    !estaEnGrupo(
-      req.claims,
-      'administradores',
-    )
-  ) {
-    return res.status(403).json({
-      error:
-        'solo administradores pueden eliminar juegos',
+app.delete(
+  '/catalogo/:juegoId',
+  (req, res) => {
+    if (
+      !estaEnGrupo(
+        req.claims,
+        'administradores',
+      )
+    ) {
+      return res.status(403).json({
+        error:
+          'solo administradores pueden eliminar juegos',
+      });
+    }
+
+    const juego =
+      catalogo.find(
+        (j) =>
+          j.id ===
+          req.params.juegoId,
+      );
+
+    if (!juego) {
+      return res.status(404).json({
+        error:
+          'juego no existe',
+      });
+    }
+
+    if (
+      juego.activo === false
+    ) {
+      return res.status(409).json({
+        error:
+          'el juego ya fue eliminado del catálogo',
+      });
+    }
+
+    juego.activo = false;
+
+    juego.eliminadoPor =
+      req.claims.sub;
+
+    juego.eliminadoEn =
+      new Date().toISOString();
+
+    guardarCatalogo();
+
+    return res.json({
+      mensaje:
+        'juego eliminado del catálogo',
+
+      juego,
     });
-  }
-
-  const juego = catalogo.find(
-    (j) => j.id === req.params.juegoId,
-  );
-
-  if (!juego) {
-    return res.status(404).json({
-      error: 'juego no existe',
-    });
-  }
-
-  if (juego.activo === false) {
-    return res.status(409).json({
-      error:
-        'el juego ya fue eliminado del catálogo',
-    });
-  }
-
-  juego.activo = false;
-  juego.eliminadoPor = req.claims.sub;
-  juego.eliminadoEn =
-    new Date().toISOString();
-
-  guardarCatalogo();
-
-  return res.json({
-    mensaje:
-      'juego eliminado del catálogo',
-    juego,
-  });
-});
+  },
+);
 
 /* =====================================================
    COMPRAS
+
+   La identidad del comprador sale exclusivamente
+   del access token validado por el microservicio.
 ===================================================== */
 
 app.post('/compras', (req, res) => {
   const {
     juegoId,
-    usuarioSub,
   } = req.body ?? {};
 
-  const juego = catalogo.find(
-    (j) =>
-      j.id === juegoId &&
-      j.activo !== false,
-  );
+  const usuarioSub =
+    req.claims.sub;
 
-  if (!juego) {
-    return res.status(404).json({
-      error: 'el juego no existe',
+  if (!juegoId) {
+    return res.status(400).json({
+      error:
+        'falta juegoId',
     });
   }
 
-  const yaLoTiene = licencias.some(
-    (l) =>
-      l.juegoId === juegoId &&
-      l.usuarioSub === usuarioSub &&
-      !l.revocada,
-  );
+  const juego =
+    catalogo.find(
+      (j) =>
+        j.id === juegoId &&
+        j.activo !== false,
+    );
+
+  if (!juego) {
+    return res.status(404).json({
+      error:
+        'el juego no existe',
+    });
+  }
+
+  const yaLoTiene =
+    licencias.some(
+      (l) =>
+        l.juegoId ===
+          juegoId &&
+        l.usuarioSub ===
+          usuarioSub &&
+        !l.revocada,
+    );
 
   if (yaLoTiene) {
     return res.status(409).json({
@@ -317,37 +411,51 @@ app.post('/compras', (req, res) => {
     });
   }
 
-  const licencia = crearLicencia(
-    juegoId,
-    usuarioSub,
-  );
+  const licencia =
+    crearLicencia(
+      juegoId,
+      usuarioSub,
+    );
 
-  return res.status(201).json({
-    licencia,
-    juego,
-  });
+  return res
+    .status(201)
+    .json({
+      licencia,
+      juego,
+    });
 });
 
 /* =====================================================
    BIBLIOTECA
+
+   No recibe usuario por URL ni por body.
+   La identidad sale exclusivamente del token.
 ===================================================== */
 
 app.get(
-  '/biblioteca/:usuarioSub',
+  '/biblioteca',
   (req, res) => {
-    const mias = licencias
-      .filter(
-        (l) =>
-          l.usuarioSub ===
-            req.params.usuarioSub &&
-          !l.revocada,
-      )
-      .map((l) => ({
-        ...l,
-        juego: catalogo.find(
-          (j) => j.id === l.juegoId,
-        ),
-      }));
+    const usuarioSub =
+      req.claims.sub;
+
+    const mias =
+      licencias
+        .filter(
+          (l) =>
+            l.usuarioSub ===
+              usuarioSub &&
+            !l.revocada,
+        )
+        .map((l) => ({
+          ...l,
+
+          juego:
+            catalogo.find(
+              (j) =>
+                j.id ===
+                l.juegoId,
+            ),
+        }));
 
     return res.json(mias);
   },
@@ -358,29 +466,38 @@ app.get(
    Solo administradores
 ===================================================== */
 
-app.get('/licencias', (req, res) => {
-  if (
-    !estaEnGrupo(
-      req.claims,
-      'administradores',
-    )
-  ) {
-    return res.status(403).json({
-      error: 'solo administradores',
-    });
-  }
+app.get(
+  '/licencias',
+  (req, res) => {
+    if (
+      !estaEnGrupo(
+        req.claims,
+        'administradores',
+      )
+    ) {
+      return res.status(403).json({
+        error:
+          'solo administradores',
+      });
+    }
 
-  const todas = licencias.map(
-    (l) => ({
-      ...l,
-      juego: catalogo.find(
-        (j) => j.id === l.juegoId,
-      ),
-    }),
-  );
+    const todas =
+      licencias.map(
+        (l) => ({
+          ...l,
 
-  return res.json(todas);
-});
+          juego:
+            catalogo.find(
+              (j) =>
+                j.id ===
+                l.juegoId,
+            ),
+        }),
+      );
+
+    return res.json(todas);
+  },
+);
 
 /* =====================================================
    REVOCAR LICENCIA
@@ -397,25 +514,27 @@ app.delete(
       )
     ) {
       return res.status(403).json({
-        error: 'solo administradores',
+        error:
+          'solo administradores',
       });
     }
 
-    const { revocadoPor } =
-      req.body ?? {};
-
-    const licencia = revocarLicencia(
-      req.params.licenciaId,
-      revocadoPor ?? req.claims.sub,
-    );
+    const licencia =
+      revocarLicencia(
+        req.params.licenciaId,
+        req.claims.sub,
+      );
 
     if (!licencia) {
       return res.status(404).json({
-        error: 'licencia no existe',
+        error:
+          'licencia no existe',
       });
     }
 
-    return res.json(licencia);
+    return res.json(
+      licencia,
+    );
   },
 );
 
@@ -424,31 +543,42 @@ app.delete(
    Solo administradores
 ===================================================== */
 
-app.get('/auditoria', (req, res) => {
-  if (
-    !estaEnGrupo(
-      req.claims,
-      'administradores',
-    )
-  ) {
-    return res.status(403).json({
-      error: 'solo administradores',
-    });
-  }
+app.get(
+  '/auditoria',
+  (req, res) => {
+    if (
+      !estaEnGrupo(
+        req.claims,
+        'administradores',
+      )
+    ) {
+      return res.status(403).json({
+        error:
+          'solo administradores',
+      });
+    }
 
-  return res.json(auditoria);
-});
+    return res.json(
+      auditoria,
+    );
+  },
+);
 
 /* =====================================================
    SERVIDOR
 ===================================================== */
 
-const port = Number(
-  process.env.PORT ?? 3001,
-);
-
-app.listen(port, () => {
-  console.log(
-    `microservicio de VidalStore escuchando en http://localhost:${port}`,
+const port =
+  Number(
+    process.env.PORT ??
+      3001,
   );
-});
+
+app.listen(
+  port,
+  () => {
+    console.log(
+      `microservicio de VidalStore escuchando en http://localhost:${port}`,
+    );
+  },
+);
