@@ -23,8 +23,41 @@ import {
 
 @Controller('v1/catalogo')
 export class CatalogoController {
+  /* ===================================================
+     RESPUESTA DEL MICROSERVICIO
+  =================================================== */
+
   private async responder(r: Response) {
-    const data = await r.json();
+    const texto = await r.text();
+
+    let data: unknown;
+
+    try {
+      data = texto
+        ? JSON.parse(texto)
+        : null;
+    } catch {
+      console.error(
+        'El microservicio devolvió una respuesta que no es JSON:',
+        {
+          status: r.status,
+          url: r.url,
+          contentType:
+            r.headers.get(
+              'content-type',
+            ),
+          respuesta:
+            texto.slice(0, 500),
+        },
+      );
+
+      data = {
+        error:
+          'el microservicio devolvió una respuesta inválida',
+        status:
+          r.status,
+      };
+    }
 
     if (!r.ok) {
       throw new HttpException(
@@ -202,13 +235,22 @@ export class CatalogoController {
       );
     }
 
+    const url =
+      `${MICROSERVICIO_URL}/catalogo/${encodeURIComponent(juegoId)}`;
+
+    console.log(
+      `DELETE catálogo -> ${url}`,
+    );
+
     const r = await fetch(
-      `${MICROSERVICIO_URL}/catalogo/${encodeURIComponent(juegoId)}`,
+      url,
       {
         method: 'DELETE',
         headers: {
           Authorization:
             authorization!,
+          Accept:
+            'application/json',
         },
       },
     );

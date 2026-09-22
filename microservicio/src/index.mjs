@@ -234,20 +234,19 @@ app.put('/catalogo/:juegoId', (req, res) => {
 /* =====================================================
    ELIMINAR JUEGO
    Eliminación lógica.
-   Solo editores y administradores.
+   Solo administradores
 ===================================================== */
 
 app.delete('/catalogo/:juegoId', (req, res) => {
   if (
     !estaEnGrupo(
       req.claims,
-      'editores',
       'administradores',
     )
   ) {
     return res.status(403).json({
       error:
-        'solo editores o administradores pueden eliminar juegos',
+        'solo administradores pueden eliminar juegos',
     });
   }
 
