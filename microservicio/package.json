@@ -8,9 +8,11 @@
     "start:dev": "node --watch src/index.mjs"
   },
   "dependencies": {
-    "express": "^4.21.0",
+    "amqplib": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "jose": "^5.9.6"
+    "express": "^4.21.0",
+    "jose": "^5.9.6",
+    "pg": "^8.23.1"
   }
 }
