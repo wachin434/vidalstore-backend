@@ -6,14 +6,23 @@ import {
   estaEnGrupo,
 } from './auth.mjs';
 
+import { catalogo, guardarCatalogo } from './datos.mjs';
+import { aplicarEsquema } from './db/pool.mjs';
 import {
-  catalogo,
-  licencias,
-  auditoria,
+  LicenciaDuplicada,
+  aLicenciaApi,
   crearLicencia,
+  listarActivasDeUsuario,
+  listarTodas,
   revocarLicencia,
-  guardarCatalogo,
-} from './datos.mjs';
+} from './db/licencias-repo.mjs';
+import { iniciarPublicador, publicar } from './mensajeria/publicador.mjs';
+import {
+  EXCHANGE_EVENTOS,
+  RK_COMPRA_REALIZADA,
+  RK_JUEGO_PUBLICADO,
+  RK_LICENCIA_REVOCADA,
+} from './mensajeria/topologia.mjs';
 
 const app = express();
 
@@ -32,6 +41,36 @@ function crearSlug(titulo) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Express 4 no captura los errores de handlers async: este envoltorio los
+ * manda al manejador de errores final (500) en vez de dejar la petición colgada.
+ */
+const ruta = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+/**
+ * Publica un evento DESPUÉS de haber escrito. Si el broker falla, el dato ya
+ * está guardado: se deja el error en el log con el identificador de negocio
+ * para poder republicarlo a mano y se responde igual. Es la ventana conocida
+ * entre escribir y publicar (se documenta en el README).
+ */
+async function publicarEvento(routingKey, payload, referencia) {
+  try {
+    await publicar(EXCHANGE_EVENTOS, routingKey, payload);
+  } catch (err) {
+    console.error(
+      `No se pudo publicar ${routingKey} (${referencia}): ${err.message}`,
+    );
+  }
+}
+
+function conJuego(licenciaApi) {
+  return {
+    ...licenciaApi,
+    juego: catalogo.find((j) => j.id === licenciaApi.juegoId),
+  };
 }
 
 /* =====================================================
@@ -55,7 +94,7 @@ app.get('/catalogo', (_req, res) => {
    Solo editores y administradores
 ===================================================== */
 
-app.post('/catalogo', (req, res) => {
+app.post('/catalogo', ruta(async (req, res) => {
   if (
     !estaEnGrupo(
       req.claims,
@@ -159,10 +198,20 @@ app.post('/catalogo', (req, res) => {
 
   guardarCatalogo();
 
+  await publicarEvento(
+    RK_JUEGO_PUBLICADO,
+    {
+      juegoId: juego.id,
+      titulo: juego.titulo,
+      editorSub: req.claims.sub,
+    },
+    `juegoId=${juego.id}`,
+  );
+
   return res
     .status(201)
     .json(juego);
-});
+}));
 
 /* =====================================================
    EDITAR JUEGO
@@ -365,65 +414,50 @@ app.delete(
    del access token validado por el microservicio.
 ===================================================== */
 
-app.post('/compras', (req, res) => {
-  const {
-    juegoId,
-  } = req.body ?? {};
+app.post('/compras', ruta(async (req, res) => {
+  const { juegoId } = req.body ?? {};
+  const usuarioSub = req.claims.sub;
 
-  const usuarioSub =
-    req.claims.sub;
-
-  if (!juegoId) {
-    return res.status(400).json({
-      error:
-        'falta juegoId',
-    });
+  if (!juegoId || typeof juegoId !== 'string') {
+    return res.status(400).json({ error: 'falta juegoId' });
   }
 
-  const juego =
-    catalogo.find(
-      (j) =>
-        j.id === juegoId &&
-        j.activo !== false,
-    );
+  const juego = catalogo.find(
+    (j) => j.id === juegoId && j.activo !== false,
+  );
 
   if (!juego) {
-    return res.status(404).json({
-      error:
-        'el juego no existe',
-    });
+    return res.status(404).json({ error: 'el juego no existe' });
   }
 
-  const yaLoTiene =
-    licencias.some(
-      (l) =>
-        l.juegoId ===
-          juegoId &&
-        l.usuarioSub ===
-          usuarioSub &&
-        !l.revocada,
-    );
+  let fila;
 
-  if (yaLoTiene) {
-    return res.status(409).json({
-      error:
-        'ya tienes una licencia activa de este juego',
-    });
+  try {
+    fila = await crearLicencia(juegoId, usuarioSub);
+  } catch (err) {
+    if (err instanceof LicenciaDuplicada) {
+      return res.status(409).json({ error: err.message });
+    }
+    throw err;
   }
 
-  const licencia =
-    crearLicencia(
-      juegoId,
-      usuarioSub,
-    );
+  // La compra se publica antes de responder el 201.
+  await publicarEvento(
+    RK_COMPRA_REALIZADA,
+    {
+      licenciaId: fila.id,
+      juegoId: fila.juego_id,
+      usuarioSub: fila.usuario_sub,
+      adquiridaEn: fila.adquirida_en.toISOString(),
+    },
+    `licenciaId=${fila.id}`,
+  );
 
-  return res
-    .status(201)
-    .json({
-      licencia,
-      juego,
-    });
-});
+  return res.status(201).json({
+    licencia: aLicenciaApi(fila),
+    juego,
+  });
+}));
 
 /* =====================================================
    BIBLIOTECA
@@ -432,153 +466,101 @@ app.post('/compras', (req, res) => {
    La identidad sale exclusivamente del token.
 ===================================================== */
 
-app.get(
-  '/biblioteca',
-  (req, res) => {
-    const usuarioSub =
-      req.claims.sub;
-
-    const mias =
-      licencias
-        .filter(
-          (l) =>
-            l.usuarioSub ===
-              usuarioSub &&
-            !l.revocada,
-        )
-        .map((l) => ({
-          ...l,
-
-          juego:
-            catalogo.find(
-              (j) =>
-                j.id ===
-                l.juegoId,
-            ),
-        }));
-
-    return res.json(mias);
-  },
-);
+app.get('/biblioteca', ruta(async (req, res) => {
+  const filas = await listarActivasDeUsuario(req.claims.sub);
+  return res.json(filas.map((f) => conJuego(aLicenciaApi(f))));
+}));
 
 /* =====================================================
    LICENCIAS
    Solo administradores
 ===================================================== */
 
-app.get(
-  '/licencias',
-  (req, res) => {
-    if (
-      !estaEnGrupo(
-        req.claims,
-        'administradores',
-      )
-    ) {
-      return res.status(403).json({
-        error:
-          'solo administradores',
-      });
-    }
+app.get('/licencias', ruta(async (req, res) => {
+  if (!estaEnGrupo(req.claims, 'administradores')) {
+    return res.status(403).json({ error: 'solo administradores' });
+  }
 
-    const todas =
-      licencias.map(
-        (l) => ({
-          ...l,
-
-          juego:
-            catalogo.find(
-              (j) =>
-                j.id ===
-                l.juegoId,
-            ),
-        }),
-      );
-
-    return res.json(todas);
-  },
-);
+  const filas = await listarTodas();
+  return res.json(filas.map((f) => conJuego(aLicenciaApi(f))));
+}));
 
 /* =====================================================
    REVOCAR LICENCIA
-   Solo administradores
+   Solo administradores.
+   revocada_por sale del sub del token; cualquier "revocadoPor"
+   que venga en el cuerpo se ignora. Solo se lee "motivo".
 ===================================================== */
 
-app.delete(
-  '/licencias/:licenciaId',
-  (req, res) => {
-    if (
-      !estaEnGrupo(
-        req.claims,
-        'administradores',
-      )
-    ) {
-      return res.status(403).json({
-        error:
-          'solo administradores',
-      });
-    }
+app.delete('/licencias/:licenciaId', ruta(async (req, res) => {
+  if (!estaEnGrupo(req.claims, 'administradores')) {
+    return res.status(403).json({ error: 'solo administradores' });
+  }
 
-    const licencia =
-      revocarLicencia(
-        req.params.licenciaId,
-        req.claims.sub,
-      );
+  const motivoCrudo = req.body?.motivo;
 
-    if (!licencia) {
-      return res.status(404).json({
-        error:
-          'licencia no existe',
-      });
-    }
+  if (motivoCrudo !== undefined && typeof motivoCrudo !== 'string') {
+    return res.status(400).json({ error: 'el motivo debe ser texto' });
+  }
 
-    return res.json(
-      licencia,
+  const motivo = (motivoCrudo ?? '').trim();
+
+  if (motivo.length > 500) {
+    return res
+      .status(400)
+      .json({ error: 'el motivo no puede superar 500 caracteres' });
+  }
+
+  const resultado = await revocarLicencia(
+    req.params.licenciaId,
+    req.claims.sub,
+  );
+
+  if (!resultado) {
+    return res.status(404).json({ error: 'licencia no existe' });
+  }
+
+  const { fila, yaEstabaRevocada } = resultado;
+
+  // Si ya estaba revocada no se vuelve a publicar: sería un evento duplicado.
+  if (!yaEstabaRevocada) {
+    await publicarEvento(
+      RK_LICENCIA_REVOCADA,
+      {
+        licenciaId: fila.id,
+        juegoId: fila.juego_id,
+        // usuarioSub sale de la fila modificada, no del cuerpo ni del token del admin
+        usuarioSub: fila.usuario_sub,
+        revocadaPor: fila.revocada_por,
+        motivo,
+      },
+      `licenciaId=${fila.id}`,
     );
-  },
-);
+  }
+
+  return res.json(conJuego(aLicenciaApi(fila)));
+}));
 
 /* =====================================================
-   AUDITORÍA
-   Solo administradores
+   ERRORES NO PREVISTOS
 ===================================================== */
 
-app.get(
-  '/auditoria',
-  (req, res) => {
-    if (
-      !estaEnGrupo(
-        req.claims,
-        'administradores',
-      )
-    ) {
-      return res.status(403).json({
-        error:
-          'solo administradores',
-      });
-    }
-
-    return res.json(
-      auditoria,
-    );
-  },
-);
+app.use((err, _req, res, _next) => {
+  console.error(`Error no controlado: ${err.stack ?? err.message}`);
+  return res.status(500).json({ error: 'error interno del servidor' });
+});
 
 /* =====================================================
    SERVIDOR
 ===================================================== */
 
-const port =
-  Number(
-    process.env.PORT ??
-      3001,
-  );
+const port = Number(process.env.PORT ?? 3001);
 
-app.listen(
-  port,
-  () => {
-    console.log(
-      `microservicio de VidalStore escuchando en http://localhost:${port}`,
-    );
-  },
-);
+await aplicarEsquema();
+await iniciarPublicador();
+
+app.listen(port, () => {
+  console.log(
+    `microservicio de VidalStore escuchando en http://localhost:${port}`,
+  );
+});
