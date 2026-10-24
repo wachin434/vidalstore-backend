@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Headers,
+  HttpException,
   Post,
 } from '@nestjs/common';
 
@@ -67,6 +68,12 @@ export class ComprasController {
       },
     );
 
-    return r.json();
+    const resultado = await r.json();
+
+    if (!r.ok) {
+      throw new HttpException(resultado, r.status);
+    }
+
+    return resultado;
   }
 }

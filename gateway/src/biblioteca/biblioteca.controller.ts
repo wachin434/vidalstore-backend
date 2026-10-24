@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Get,
   Headers,
+  HttpException,
 } from '@nestjs/common';
 
 import {
@@ -47,6 +48,12 @@ export class BibliotecaController {
       },
     );
 
-    return r.json();
+    const resultado = await r.json();
+
+    if (!r.ok) {
+      throw new HttpException(resultado, r.status);
+    }
+
+    return resultado;
   }
 }
