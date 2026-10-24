@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Delete,
   ForbiddenException,
   Get,
   Headers,
+  HttpException,
   Param,
 } from '@nestjs/common';
 import { estaEnGrupo } from '../auth/verificador';
@@ -29,6 +31,7 @@ export class LicenciasController {
   async revocar(
     @Param('licenciaId') licenciaId: string,
     @Headers('authorization') authorization?: string,
+    @Body() body?: { motivo?: string },
   ) {
     const claims = await autenticarOFallar(authorization);
 
@@ -42,8 +45,17 @@ export class LicenciasController {
         'Content-Type': 'application/json',
         Authorization: authorization!,
       },
-      body: JSON.stringify({ revocadoPor: claims.sub }),
+      // Solo viaja el motivo. Quién revoca lo decide el microservicio con el
+      // sub del token que reenviamos en Authorization, no un campo del cuerpo.
+      body: JSON.stringify({ motivo: body?.motivo }),
     });
-    return r.json();
+
+    const resultado = await r.json();
+
+    if (!r.ok) {
+      throw new HttpException(resultado, r.status);
+    }
+
+    return resultado;
   }
 }
