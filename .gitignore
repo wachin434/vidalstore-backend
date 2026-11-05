@@ -4,3 +4,4 @@ microservicio/.env
 ficha.txt
 *.log
 .DS_Store
+microservicio/dist/
