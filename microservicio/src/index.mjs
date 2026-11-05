@@ -17,6 +17,7 @@ import {
   revocarLicencia,
 } from './db/licencias-repo.mjs';
 import { iniciarPublicador, publicar } from './mensajeria/publicador.mjs';
+import { publicarEnKafka, cerrarProductor } from '../dist/kafka/publicador.js';
 import {
   EXCHANGE_EVENTOS,
   RK_COMPRA_REALIZADA,
@@ -453,6 +454,12 @@ app.post('/compras', ruta(async (req, res) => {
     `licenciaId=${fila.id}`,
   );
 
+  // Y además en Kafka (EP3): no reemplaza a RabbitMQ.
+  await publicarEnKafka('compra.realizada', fila.juego_id, fila.usuario_sub, {
+    licenciaId: String(fila.id),
+    adquiridaEn: fila.adquirida_en.toISOString(),
+  });
+
   return res.status(201).json({
     licencia: aLicenciaApi(fila),
     juego,
@@ -536,6 +543,13 @@ app.delete('/licencias/:licenciaId', ruta(async (req, res) => {
       },
       `licenciaId=${fila.id}`,
     );
+
+    // La key de Kafka es el dueño de la licencia, no el admin que la revoca.
+    await publicarEnKafka('licencia.revocada', fila.juego_id, fila.usuario_sub, {
+      licenciaId: String(fila.id),
+      revocadaPor: String(fila.revocada_por),
+      motivo,
+    });
   }
 
   return res.json(conJuego(aLicenciaApi(fila)));
@@ -563,4 +577,10 @@ app.listen(port, () => {
   console.log(
     `microservicio de VidalStore escuchando en http://localhost:${port}`,
   );
+});
+
+// Cierra el productor de Kafka al apagar el contenedor (docker compose stop).
+process.on('SIGTERM', async () => {
+  await cerrarProductor();
+  process.exit(0);
 });
