@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.mjs",
     "start:dev": "node --watch src/index.mjs",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@platformatic/kafka": "2.14.0",
