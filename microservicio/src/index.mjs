@@ -19,6 +19,11 @@ import {
 import { iniciarPublicador, publicar } from './mensajeria/publicador.mjs';
 import { publicarEnKafka, cerrarProductor } from '../dist/kafka/publicador.js';
 import {
+  publicarJuego,
+  publicarCatalogoCompleto,
+  cerrarProductorCatalogo,
+} from '../dist/kafka/catalogo.js';
+import {
   EXCHANGE_EVENTOS,
   RK_COMPRA_REALIZADA,
   RK_JUEGO_PUBLICADO,
@@ -209,6 +214,9 @@ app.post('/catalogo', ruta(async (req, res) => {
     `juegoId=${juego.id}`,
   );
 
+  // Y en Kafka (topic compactado): el estado completo del juego, con el juegoId como key.
+  await publicarJuego('juego.publicado', juego, req.claims.sub);
+
   return res
     .status(201)
     .json(juego);
@@ -221,7 +229,7 @@ app.post('/catalogo', ruta(async (req, res) => {
 
 app.put(
   '/catalogo/:juegoId',
-  (req, res) => {
+  ruta(async (req, res) => {
     if (
       !estaEnGrupo(
         req.claims,
@@ -285,6 +293,8 @@ app.put(
         tituloLimpio;
     }
 
+    let precioCambio = false;
+
     if (
       precio !== undefined
     ) {
@@ -304,6 +314,8 @@ app.put(
               'el precio debe ser un número válido',
           });
       }
+
+      precioCambio = precioNumero !== juego.precio;
 
       juego.precio =
         precioNumero;
@@ -341,8 +353,14 @@ app.put(
 
     guardarCatalogo();
 
+    await publicarJuego(
+      precioCambio ? 'precio.cambiado' : 'juego.publicado',
+      juego,
+      req.claims.sub,
+    );
+
     return res.json(juego);
-  },
+  }),
 );
 
 /* =====================================================
@@ -353,7 +371,7 @@ app.put(
 
 app.delete(
   '/catalogo/:juegoId',
-  (req, res) => {
+  ruta(async (req, res) => {
     if (
       !estaEnGrupo(
         req.claims,
@@ -399,13 +417,16 @@ app.delete(
 
     guardarCatalogo();
 
+    // El juego retirado se publica con activo=false (no se borra la key): el ultimo mensaje manda.
+    await publicarJuego('juego.publicado', juego, req.claims.sub);
+
     return res.json({
       mensaje:
         'juego eliminado del catálogo',
 
       juego,
     });
-  },
+  }),
 );
 
 /* =====================================================
@@ -579,8 +600,12 @@ app.listen(port, () => {
   );
 });
 
+// Estado actual de todo el catalogo en vidalstore.catalogo. Sin await: no retrasa el arranque.
+void publicarCatalogoCompleto(catalogo);
+
 // Cierra el productor de Kafka al apagar el contenedor (docker compose stop).
 process.on('SIGTERM', async () => {
   await cerrarProductor();
+  await cerrarProductorCatalogo();
   process.exit(0);
 });
