@@ -1,0 +1,35 @@
+name: imagen
+
+# vidalstore-backend tiene dos servicios, cada uno con su Dockerfile: gateway y microservicio.
+# Un solo workflow construye las dos imagenes (una por pieza) cuando main cambia.
+# La etiqueta es el sha del commit de main: ghcr.io/<usuario>/vidalstore-<pieza>:<sha>
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  imagen:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pieza: [gateway, microservicio]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.pieza }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/vidalstore-${{ matrix.pieza }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
