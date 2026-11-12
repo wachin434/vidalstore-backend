@@ -3,6 +3,7 @@ import { CatalogoController } from './catalogo/catalogo.controller';
 import { ComprasController } from './compras/compras.controller';
 import { BibliotecaController } from './biblioteca/biblioteca.controller';
 import { LicenciasController } from './licencias/licencias.controller';
+import { PanelController } from './panel/panel.controller';
 
 @Module({
   controllers: [
@@ -10,6 +11,7 @@ import { LicenciasController } from './licencias/licencias.controller';
     ComprasController,
     BibliotecaController,
     LicenciasController,
+    PanelController,
   ],
 })
 export class AppModule {}
