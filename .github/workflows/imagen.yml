@@ -13,7 +13,29 @@ permissions:
   packages: write
 
 jobs:
+  # Cada pieza (gateway, microservicio) se prueba por separado. La imagen solo se publica si las pruebas pasan.
+  pruebas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pieza: [gateway, microservicio]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.pieza }}/package-lock.json
+      - run: npm ci
+        working-directory: ./${{ matrix.pieza }}
+      - run: npm run lint --if-present
+        working-directory: ./${{ matrix.pieza }}
+      - run: npm test --if-present
+        working-directory: ./${{ matrix.pieza }}
+      - run: npm run build --if-present
+        working-directory: ./${{ matrix.pieza }}
   imagen:
+    needs: pruebas
     runs-on: ubuntu-latest
     strategy:
       matrix:
